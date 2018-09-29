@@ -23,7 +23,9 @@
 #ifndef __INTEL_GKIT_LIB_H
 #define __INTEL_GKIT_LIB_H
 
+#define _GNU_SOURCE
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <fcntl.h>
@@ -45,6 +47,16 @@ struct intel_execution_engine {
 	unsigned flags;
 };
 
+/**
+ * drm_get_card:
+ *
+ * Get an i915 drm card index number for use in /dev or /sys. The minor index of
+ * the legacy node is returned, not of the control or render node.
+ *
+ * Returns:
+ * The i915 drm index or -1 on error
+ */
+int drm_get_card(void);
 
 /**
  * drm_open_driver:
@@ -140,6 +152,7 @@ uint32_t gem_create(int fd, uint64_t size);
  */
 void gem_write(int fd, uint32_t handle, uint64_t offset, const void *buf, uint64_t length);
 
+int __gem_execbuf(int fd, struct drm_i915_gem_execbuffer2 *execbuf);
 /**
  * gem_execbuf:
  * @fd: open i915 drm file descriptor

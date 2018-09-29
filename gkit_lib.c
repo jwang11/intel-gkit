@@ -20,7 +20,6 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-#include <stdio.h>
 #include "gkit_lib.h"
 
 const struct intel_execution_engine intel_execution_engines[] = {
@@ -33,6 +32,39 @@ const struct intel_execution_engine intel_execution_engines[] = {
 	{ "vebox", "vecs0", I915_EXEC_VEBOX, 0 },
 	{ NULL, 0, 0 }
 };
+
+/**
+ * drm_get_card:
+ *
+ * Get an i915 drm card index number for use in /dev or /sys. The minor index of
+ * the legacy node is returned, not of the control or render node.
+ *
+ * Returns:
+ * The i915 drm index or -1 on error
+ */
+int drm_get_card(void)
+{
+	char *name;
+	int i, fd;
+
+	for (i = 0; i < 16; i++) {
+		int ret;
+
+		ret = asprintf(&name, "/dev/dri/card%u", i);
+		assert(ret != -1);
+
+		fd = open(name, O_RDWR);
+		free(name);
+
+		if (fd == -1)
+			continue;
+		close(fd);
+		return i;
+	}
+
+	printf("No intel gpu found\n");
+	return -1;
+}
 
 void *__gem_mmap__gtt(int fd, uint32_t handle, uint64_t size, unsigned prot)
 {
@@ -199,7 +231,7 @@ void gem_write(int fd, uint32_t handle, uint64_t offset, const void *buf, uint64
 	assert(__gem_write(fd, handle, offset, buf, length)==0);
 }
 
-static int __gem_execbuf(int fd, struct drm_i915_gem_execbuffer2 *execbuf)
+int __gem_execbuf(int fd, struct drm_i915_gem_execbuffer2 *execbuf)
 {
 	int err = 0;
 	if (drmIoctl(fd, DRM_IOCTL_I915_GEM_EXECBUFFER2, execbuf))
