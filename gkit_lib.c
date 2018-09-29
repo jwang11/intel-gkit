@@ -34,6 +34,79 @@ const struct intel_execution_engine intel_execution_engines[] = {
 	{ NULL, 0, 0 }
 };
 
+void *__gem_mmap__gtt(int fd, uint32_t handle, uint64_t size, unsigned prot)
+{
+	struct drm_i915_gem_mmap_gtt mmap_arg;
+	void *ptr;
+
+	memset(&mmap_arg, 0, sizeof(mmap_arg));
+	mmap_arg.handle = handle;
+	if (drmIoctl(fd, DRM_IOCTL_I915_GEM_MMAP_GTT, &mmap_arg))
+		return NULL;
+
+	ptr = mmap(0, size, prot, MAP_SHARED, fd, mmap_arg.offset);
+	return ptr;
+}
+
+void *gem_mmap__gtt(int fd, uint32_t handle, uint64_t size, unsigned prot)
+{
+	void *ptr = __gem_mmap__gtt(fd, handle, size, prot);
+	assert(ptr);
+	return ptr;
+}
+
+int gem_wait(int fd, uint32_t handle, int64_t *timeout_ns)
+{
+	struct drm_i915_gem_wait wait;
+	int ret;
+
+	memset(&wait, 0, sizeof(wait));
+	wait.bo_handle = handle;
+	wait.timeout_ns = timeout_ns ? *timeout_ns : -1;
+	wait.flags = 0;
+
+	ret = 0;
+	if (drmIoctl(fd, DRM_IOCTL_I915_GEM_WAIT, &wait))
+		ret = -errno;
+
+	if (timeout_ns)
+		*timeout_ns = wait.timeout_ns;
+
+	return ret;
+}
+
+int __gem_set_domain(int fd, uint32_t handle, uint32_t read, uint32_t write)
+{
+	struct drm_i915_gem_set_domain set_domain;
+	int err;
+
+	memset(&set_domain, 0, sizeof(set_domain));
+	set_domain.handle = handle;
+	set_domain.read_domains = read;
+	set_domain.write_domain = write;
+
+	err = 0;
+	if (drmIoctl(fd, DRM_IOCTL_I915_GEM_SET_DOMAIN, &set_domain))
+		err = -errno;
+
+	return err;
+}
+
+void gem_set_domain(int fd, uint32_t handle, uint32_t read, uint32_t write)
+{
+	assert(__gem_set_domain(fd, handle, read, write) == 0);
+}
+
+void gem_sync(int fd, uint32_t handle)
+{
+	if (gem_wait(fd, handle, NULL))
+		gem_set_domain(fd, handle,
+			       I915_GEM_DOMAIN_GTT,
+			       I915_GEM_DOMAIN_GTT);
+	errno = 0;
+}
+
+
 static int __search_and_open(const char *base, int offset, unsigned int chipset)
 {
 	for (int i = 0; i < 16; i++) {

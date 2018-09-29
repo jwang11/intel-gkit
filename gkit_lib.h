@@ -28,6 +28,7 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
@@ -44,7 +45,7 @@ struct intel_execution_engine {
 	unsigned flags;
 };
 
-extern const struct intel_execution_engine intel_execution_engines[];
+
 /**
  * drm_open_driver:
  * @chipset: OR'd flags for each chipset to search, eg. #DRIVER_INTEL
@@ -55,6 +56,54 @@ extern const struct intel_execution_engine intel_execution_engines[];
  * Returns: a drm file descriptor
  */
 int drm_open_driver(int chipset);
+
+/**
+ * gem_mmap__gtt:
+ * @fd: open i915 drm file descriptor
+ * @handle: gem buffer object handle
+ * @size: size of the gem buffer
+ * @prot: memory protection bits as used by mmap()
+ *
+ * Like __gem_mmap__gtt() except we assert on failure.
+ *
+ * Returns: A pointer to the created memory mapping
+ */
+void *gem_mmap__gtt(int fd, uint32_t handle, uint64_t size, unsigned prot);
+
+/**
+ * __gem_wait:
+ * @fd: open i915 drm file descriptor
+ * @handle: gem buffer object handle
+ * @timeout_ns: [in] time to wait, [out] remaining time (in nanoseconds)
+ *
+ * This functions waits for outstanding rendering to complete, upto
+ * the timeout_ns. If no timeout_ns is provided, the wait is indefinite and
+ * only returns upon an error or when the rendering is complete.
+ */
+int gem_wait(int fd, uint32_t handle, int64_t *timeout_ns);
+
+/**
+ * gem_set_domain:
+ * @fd: open i915 drm file descriptor
+ * @handle: gem buffer object handle
+ * @read: gem domain bits for read access
+ * @write: gem domain bit for write access
+ *
+ * This wraps the SET_DOMAIN ioctl, which is used to control the coherency of
+ * the gem buffer object between the cpu and gtt mappings. It is also use to
+ * synchronize with outstanding rendering in general, but for that use-case
+ * please have a look at gem_sync().
+ */
+void gem_set_domain(int fd, uint32_t handle, uint32_t read, uint32_t write);
+
+/**
+ * gem_sync:
+ * @fd: open i915 drm file descriptor
+ * @handle: gem buffer object handle
+ *
+ * This functions waits for outstanding rendering to complete.
+ */
+void gem_sync(int fd, uint32_t handle);
 
 /**
  * gem_close:
