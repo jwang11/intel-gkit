@@ -36,9 +36,21 @@
 #include <assert.h>
 #include <xf86drm.h>
 #include <i915_drm.h>
+#include <sys/ioctl.h>
 
 #define MI_BATCH_BUFFER_END (0xA << 23)
 #define DRIVER_INTEL (1 << 0)
+/*
+ * Yf/Ys tiling
+ *
+ * Tiling mode in the I915_TILING_... namespace for new tiling modes which are
+ * defined in the kernel. (They are not fenceable so the kernel does not need
+ * to know about them.)
+ *
+ * They are to be used the the blitting routines below.
+ */
+#define I915_TILING_Yf  3
+#define I915_TILING_Ys  4
 
 struct intel_execution_engine {
 	const char *name;
@@ -68,6 +80,37 @@ int drm_get_card(void);
  * Returns: a drm file descriptor
  */
 int drm_open_driver(int chipset);
+
+/**
+ * __gem_mmap__wc:
+ * @fd: open i915 drm file descriptor
+ * @handle: gem buffer object handle
+ * @offset: offset in the gem buffer of the mmap arena
+ * @size: size of the mmap arena
+ * @prot: memory protection bits as used by mmap()
+ *
+ * This functions wraps up procedure to establish a memory mapping through
+ * direct cpu access, bypassing the gpu and cpu caches completely and also
+ * bypassing the GTT system agent (i.e. there is no automatic tiling of
+ * the mmapping through the fence registers).
+ *
+ * Returns: A pointer to the created memory mapping, NULL on failure.
+ */
+void *__gem_mmap__wc(int fd, uint32_t handle, uint64_t offset, uint64_t size, unsigned prot);
+
+/**
+ * gem_mmap__wc:
+ * @fd: open i915 drm file descriptor
+ * @handle: gem buffer object handle
+ * @offset: offset in the gem buffer of the mmap arena
+ * @size: size of the mmap arena
+ * @prot: memory protection bits as used by mmap()
+ *
+ * Like __gem_mmap__wc() except we assert on failure.
+ *
+ * Returns: A pointer to the created memory mapping
+ */
+void *gem_mmap__wc(int fd, uint32_t handle, uint64_t offset, uint64_t size, unsigned prot);
 
 /**
  * gem_mmap__gtt:
@@ -116,6 +159,17 @@ void gem_set_domain(int fd, uint32_t handle, uint32_t read, uint32_t write);
  * This functions waits for outstanding rendering to complete.
  */
 void gem_sync(int fd, uint32_t handle);
+
+/**
+ * gem_set_tiling:
+ * @fd: open i915 drm file descriptor
+ * @handle: gem buffer object handle
+ * @tiling: tiling mode bits
+ * @stride: stride of the buffer when using a tiled mode, otherwise must be 0
+ *
+ * This wraps the SET_TILING ioctl.
+ */
+void gem_set_tiling(int fd, uint32_t handle, uint32_t tiling, uint32_t stride);
 
 /**
  * gem_close:

@@ -87,6 +87,29 @@ void *gem_mmap__gtt(int fd, uint32_t handle, uint64_t size, unsigned prot)
 	return ptr;
 }
 
+void *__gem_mmap__wc(int fd, uint32_t handle, uint64_t offset, uint64_t size, unsigned prot)
+{
+    struct drm_i915_gem_mmap arg;
+
+    memset(&arg, 0, sizeof(arg));
+    arg.handle = handle;
+    arg.offset = offset;
+    arg.size = size;
+    arg.flags = I915_MMAP_WC;
+    if (drmIoctl(fd, DRM_IOCTL_I915_GEM_MMAP, &arg))
+        return NULL;
+
+    errno = 0;
+    return (void *)arg.addr_ptr;
+}
+
+void *gem_mmap__wc(int fd, uint32_t handle, uint64_t offset, uint64_t size, unsigned prot)
+{
+    void *ptr = __gem_mmap__wc(fd, handle, offset, size, prot);
+    assert(ptr);
+    return ptr;
+}
+
 int gem_wait(int fd, uint32_t handle, int64_t *timeout_ns)
 {
 	struct drm_i915_gem_wait wait;
@@ -138,7 +161,6 @@ void gem_sync(int fd, uint32_t handle)
 	errno = 0;
 }
 
-
 static int __search_and_open(const char *base, int offset, unsigned int chipset)
 {
 	for (int i = 0; i < 16; i++) {
@@ -182,6 +204,36 @@ void gem_close(int fd, uint32_t handle)
 	memset(&close_bo, 0, sizeof(close_bo));
 	close_bo.handle = handle;
 	drmIoctl(fd, DRM_IOCTL_GEM_CLOSE, &close_bo);
+}
+
+int __gem_set_tiling(int fd, uint32_t handle, uint32_t tiling, uint32_t stride)
+{
+    struct drm_i915_gem_set_tiling st;
+    int ret;
+
+    /* The kernel doesn't know about these tiling modes, expects NONE */
+    if (tiling == I915_TILING_Yf || tiling == I915_TILING_Ys)
+        tiling = I915_TILING_NONE;
+
+    memset(&st, 0, sizeof(st));
+    do {
+        st.handle = handle;
+        st.tiling_mode = tiling;
+        st.stride = tiling ? stride : 0;
+
+        ret = ioctl(fd, DRM_IOCTL_I915_GEM_SET_TILING, &st);
+    } while (ret == -1 && (errno == EINTR || errno == EAGAIN));
+    if (ret != 0)
+        return -errno;
+
+    errno = 0;
+    assert(st.tiling_mode == tiling);
+    return 0;
+}
+
+void gem_set_tiling(int fd, uint32_t handle, uint32_t tiling, uint32_t stride)
+{
+    assert(__gem_set_tiling(fd, handle, tiling, stride) == 0);
 }
 
 static int __gem_create(int fd, uint64_t size, uint32_t *handle)
