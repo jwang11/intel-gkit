@@ -213,6 +213,7 @@ int main(int argc, char** argv)
 		last_page = (offset + len + PAGE_SIZE) & ~(PAGE_SIZE-1);
 
 		linear = gem_mmap__wc(fd, handle, first_page, last_page - first_page, PROT_READ);
+		//linear = gem_mmap__cpu(fd, handle, first_page, last_page - first_page, PROT_READ);
 
 		/* Translate from offsets in the read buffer to the swizzled
 		 * address that it corresponds to.  This is the opposite of

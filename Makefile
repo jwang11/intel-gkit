@@ -1,7 +1,9 @@
 #src = $(wildcard *.c)
 targets = 	gem_exec_basic	\
 			gem_exec_blt	\
-			gem_tiled_wc
+			gem_tiled_wc	\
+			gem_exec_gttfill
+
 
 libsrc = gkit_lib.c
 
@@ -17,6 +19,10 @@ gem_exec_blt: gem_exec_blt.c $(libsrc)
 gem_tiled_wc: gem_tiled_wc.c $(libsrc)
 	$(CC) -o $@ $^ -I/usr/include/libdrm -ldrm
 
+gem_exec_gttfill: gem_exec_gttfill.c $(libsrc)
+	$(CC) -o $@ $^ -I/usr/include/libdrm -ldrm
+
 .PHONY: clean
+
 clean:
 	@rm -f $(targets)

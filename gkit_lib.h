@@ -29,6 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <string.h>
@@ -37,6 +38,38 @@
 #include <xf86drm.h>
 #include <i915_drm.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
+
+#define MSEC_PER_SEC (1000)
+#define USEC_PER_SEC (1000*MSEC_PER_SEC)
+#define NSEC_PER_SEC (1000*USEC_PER_SEC)
+
+uint64_t nsec_elapsed(struct timespec *start);
+
+/**
+ * igt_seconds_elapsed:
+ * @start: measure from this point in time
+ *
+ * A wrapper around igt_nsec_elapsed that reports the approximate (8% error)
+ * number of seconds since the start point.
+ */
+static inline uint32_t seconds_elapsed(struct timespec *start)
+{
+    return nsec_elapsed(start) >> 30;
+}
+
+/**
+ * until_timeout:
+ * @timeout: timeout in seconds
+ *
+ * Convenience macro loop to run the provided code block in a loop until the
+ * timeout has expired. Of course when an individual execution takes too long,
+ * the actual execution time could be a lot longer.
+ *
+ * The code block will be executed at least once.
+ */
+#define until_timeout(timeout) \
+    for (struct timespec t__={}; seconds_elapsed(&t__) < (timeout); )
 
 #define MI_BATCH_BUFFER_END (0xA << 23)
 #define DRIVER_INTEL (1 << 0)
@@ -58,6 +91,15 @@ struct intel_execution_engine {
 	unsigned exec_id;
 	unsigned flags;
 };
+/**
+ * gem_aperture_size:
+ * @fd: open i915 drm file descriptor
+ *
+ * Feature test macro to query the kernel for the total gpu aperture size.
+ *
+ * Returns: The total gtt address space size.
+ */
+uint64_t gem_aperture_size(int fd);
 
 /**
  * drm_get_card:
