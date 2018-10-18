@@ -40,6 +40,12 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 
+#define LOCAL_I915_CONTEXT_MAX_USER_PRIORITY	1023
+#define LOCAL_I915_CONTEXT_DEFAULT_PRIORITY	0
+#define LOCAL_I915_CONTEXT_MIN_USER_PRIORITY	-1023
+
+#define DRM_I915_CONTEXT_PARAM_PRIORITY 0x6
+
 #define MSEC_PER_SEC (1000)
 #define USEC_PER_SEC (1000*MSEC_PER_SEC)
 #define NSEC_PER_SEC (1000*USEC_PER_SEC)
@@ -47,7 +53,7 @@
 uint64_t nsec_elapsed(struct timespec *start);
 
 /**
- * igt_seconds_elapsed:
+ * seconds_elapsed:
  * @start: measure from this point in time
  *
  * A wrapper around igt_nsec_elapsed that reports the approximate (8% error)
@@ -91,6 +97,43 @@ struct intel_execution_engine {
 	unsigned exec_id;
 	unsigned flags;
 };
+
+int __gem_context_create(int fd, uint32_t *ctx_id);
+/**
+ * gem_context_create:
+ * @fd: open i915 drm file descriptor
+ *
+ * This wraps the CONTEXT_CREATE ioctl, which is used to allocate a new
+ * context. Note that similarly to gem_set_caching() this wrapper skips on
+ * kernels and platforms where context support is not available.
+ *
+ * Returns: The id of the allocated context.
+ */
+uint32_t gem_context_create(int fd);
+
+/**
+ * gem_context_destroy:
+ * @fd: open i915 drm file descriptor
+ * @ctx_id: i915 context id
+ *
+ * This wraps the CONTEXT_DESTROY ioctl, which is used to free a context.
+ */
+void gem_context_destroy(int fd, uint32_t ctx_id);
+
+/**
+ * __gem_context_set_priority:
+ * @fd: open i915 drm file descriptor
+ * @ctx_id: i915 context id
+ * @prio: desired context priority
+ *
+ * This function modifies priority property of the context.
+ * It is used by the scheduler to decide on the ordering of requests submitted
+ * to the hardware.
+ *
+ * Returns: An integer equal to zero for success and negative for failure
+ */
+int __gem_context_set_priority(int fd, uint32_t ctx_id, int prio);
+
 /**
  * gem_aperture_size:
  * @fd: open i915 drm file descriptor

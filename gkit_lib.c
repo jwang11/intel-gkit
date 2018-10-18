@@ -47,14 +47,69 @@ uint64_t nsec_elapsed(struct timespec *start)
         (uint64_t)NSEC_PER_SEC*(now.tv_sec - start->tv_sec));
 }
 
+int __gem_context_set_param(int fd, struct drm_i915_gem_context_param *p)
+{
+	if (drmIoctl(fd, DRM_IOCTL_I915_GEM_CONTEXT_SETPARAM, p))
+		return -errno;
+
+	errno = 0;
+	return 0;
+}
+
+int __gem_context_set_priority(int fd, uint32_t ctx_id, int prio)
+{
+	struct drm_i915_gem_context_param p;
+
+	memset(&p, 0, sizeof(p));
+	p.ctx_id = ctx_id;
+	p.size = 0;
+	p.param = DRM_I915_CONTEXT_PARAM_PRIORITY;
+	p.value = prio;
+
+	return __gem_context_set_param(fd, &p);
+}
+
+int __gem_context_create(int fd, uint32_t *ctx_id)
+{
+       struct drm_i915_gem_context_create create;
+       int err = 0;
+
+       memset(&create, 0, sizeof(create));
+       if (drmIoctl(fd, DRM_IOCTL_I915_GEM_CONTEXT_CREATE, &create) == 0)
+               *ctx_id = create.ctx_id;
+       else
+               err = -errno;
+
+       errno = 0;
+       return err;
+}
+
+uint32_t gem_context_create(int fd)
+{
+	uint32_t ctx_id;
+
+	assert(__gem_context_create(fd, &ctx_id) == 0);
+	assert(ctx_id != 0);
+
+	return ctx_id;
+}
 /**
- * gem_aperture_size:
+ * gem_context_destroy:
  * @fd: open i915 drm file descriptor
+ * @ctx_id: i915 context id
  *
- * Feature test macro to query the kernel for the total gpu aperture size.
- *
- * Returns: The total gtt address space size.
+ * This wraps the CONTEXT_DESTROY ioctl, which is used to free a context.
  */
+void gem_context_destroy(int fd, uint32_t ctx_id)
+{
+    struct drm_i915_gem_context_destroy destroy;
+
+    memset(&destroy, 0, sizeof(destroy));
+    destroy.ctx_id = ctx_id;
+
+    drmIoctl(fd, DRM_IOCTL_I915_GEM_CONTEXT_DESTROY, &destroy);
+}
+
 uint64_t gem_aperture_size(int fd)
 {
     static uint64_t aperture_size = 0;
@@ -80,15 +135,6 @@ uint64_t gem_aperture_size(int fd)
     return aperture_size;
 }
 
-/**
- * drm_get_card:
- *
- * Get an i915 drm card index number for use in /dev or /sys. The minor index of
- * the legacy node is returned, not of the control or render node.
- *
- * Returns:
- * The i915 drm index or -1 on error
- */
 int drm_get_card(void)
 {
 	char *name;
