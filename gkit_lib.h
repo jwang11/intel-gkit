@@ -30,6 +30,7 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <time.h>
+#include <poll.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <string.h>
@@ -56,13 +57,45 @@ uint64_t nsec_elapsed(struct timespec *start);
  * seconds_elapsed:
  * @start: measure from this point in time
  *
- * A wrapper around igt_nsec_elapsed that reports the approximate (8% error)
+ * A wrapper around nsec_elapsed that reports the approximate (8% error)
  * number of seconds since the start point.
  */
 static inline uint32_t seconds_elapsed(struct timespec *start)
 {
     return nsec_elapsed(start) >> 30;
 }
+
+/**
+ * __gem_execbuf_wr:
+ * @fd: open i915 drm file descriptor
+ * @execbuf: execbuffer data structure
+ *
+ * This wraps the EXECBUFFER2_WR ioctl, which submits a batchbuffer for the gpu to
+ * run. This is allowed to fail, with -errno returned.
+ */
+int __gem_execbuf_wr(int fd, struct drm_i915_gem_execbuffer2 *execbuf);
+
+/**
+ * gem_execbuf_wr:
+ * @fd: open i915 drm file descriptor
+ * @execbuf: execbuffer data structure
+ *
+ * This wraps the EXECBUFFER2_WR ioctl, which submits a batchbuffer for the gpu to
+ * run.
+ */
+void gem_execbuf_wr(int fd, struct drm_i915_gem_execbuffer2 *execbuf);
+
+/**
+ * gem_bo_busy:
+ * @fd: open i915 drm file descriptor
+ * @handle: gem buffer object handle
+ *
+ * This wraps the BUSY ioctl, which tells whether a buffer object is still
+ * actively used by the gpu in a execbuffer.
+ *
+ * Returns: The busy state of the buffer object.
+ */
+bool gem_bo_busy(int fd, uint32_t handle);
 
 /**
  * until_timeout:

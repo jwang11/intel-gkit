@@ -3,7 +3,8 @@ targets = 	gem_exec_basic	\
 			gem_exec_blt	\
 			gem_tiled_wc	\
 			gem_exec_gttfill\
-			gem_exec_latency
+			gem_exec_latency\
+			gem_fence_busy
 
 
 libsrc = gkit_lib.c
@@ -26,6 +27,8 @@ gem_exec_gttfill: gem_exec_gttfill.c $(libsrc)
 gem_exec_latency: gem_exec_latency.c $(libsrc)
 	$(CC) -o $@ $^ -I/usr/include/libdrm -ldrm
 
+gem_fence_busy: gem_fence_busy.c $(libsrc)
+	$(CC) -o $@ $^ -I/usr/include/libdrm -ldrm
 .PHONY: clean
 
 clean:

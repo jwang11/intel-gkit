@@ -47,6 +47,32 @@ uint64_t nsec_elapsed(struct timespec *start)
         (uint64_t)NSEC_PER_SEC*(now.tv_sec - start->tv_sec));
 }
 
+int __gem_execbuf_wr(int fd, struct drm_i915_gem_execbuffer2 *execbuf)
+{
+	int err = 0;
+	if (drmIoctl(fd, DRM_IOCTL_I915_GEM_EXECBUFFER2_WR, execbuf))
+		err = -errno;
+	errno = 0;
+	return err;
+}
+
+void gem_execbuf_wr(int fd, struct drm_i915_gem_execbuffer2 *execbuf)
+{
+	assert(__gem_execbuf_wr(fd, execbuf) == 0);
+}
+
+bool gem_bo_busy(int fd, uint32_t handle)
+{
+	struct drm_i915_gem_busy busy;
+
+	memset(&busy, 0, sizeof(busy));
+	busy.handle = handle;
+
+	drmIoctl(fd, DRM_IOCTL_I915_GEM_BUSY, &busy);
+
+	return !!busy.busy;
+}
+
 int __gem_context_set_param(int fd, struct drm_i915_gem_context_param *p)
 {
 	if (drmIoctl(fd, DRM_IOCTL_I915_GEM_CONTEXT_SETPARAM, p))
@@ -93,13 +119,7 @@ uint32_t gem_context_create(int fd)
 
 	return ctx_id;
 }
-/**
- * gem_context_destroy:
- * @fd: open i915 drm file descriptor
- * @ctx_id: i915 context id
- *
- * This wraps the CONTEXT_DESTROY ioctl, which is used to free a context.
- */
+
 void gem_context_destroy(int fd, uint32_t ctx_id)
 {
     struct drm_i915_gem_context_destroy destroy;
