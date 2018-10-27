@@ -53,6 +53,11 @@
 
 uint64_t nsec_elapsed(struct timespec *start);
 
+static inline bool fence_busy(int fence)
+{
+	return poll(&(struct pollfd){fence, POLLIN}, 1, 0) == 0;
+}
+
 /**
  * seconds_elapsed:
  * @start: measure from this point in time
