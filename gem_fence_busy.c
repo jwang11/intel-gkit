@@ -75,12 +75,13 @@ static void test_fence_busy(int fd, unsigned ring, unsigned flags)
 
 	assert(gem_bo_busy(fd, obj.handle));
 	assert(fence_busy(fence));
-
+	
+	struct timespec start;
+	clock_gettime(CLOCK_REALTIME, &start);
 	*batch = MI_BATCH_BUFFER_END;
 	__sync_synchronize();
-	timeout = 1;
 
-	munmap(batch, 4096);
+	timeout = 1;
 	if (flags & WAIT) {
 		struct pollfd pfd = { .fd = fence, .events = POLLIN };
 		assert(poll(&pfd, 1, timeout*1000) == 1);
@@ -89,9 +90,10 @@ static void test_fence_busy(int fd, unsigned ring, unsigned flags)
 		while (fence_busy(fence))
 			assert(seconds_elapsed(&tv) < timeout);
 	}
-
+	printf("latency = %llu ms\n", nsec_elapsed(&start)/1000);
 	assert(!gem_bo_busy(fd, obj.handle));
 
+	munmap(batch, 4096);
 	close(fence);
 	gem_close(fd, obj.handle);
 }

@@ -27,16 +27,10 @@
 
 #define _TIMES 128
 
-extern const struct intel_execution_engine intel_execution_engines[];
 static uint32_t create_highest_priority(int fd)
 {
 	uint32_t ctx = gem_context_create(fd);
 
-	/*
-	 * If there is no priority support, all contexts will have equal
-	 * priority (and therefore the max user priority), so no context
-	 * can overtake us, and we effectively can form a plug.
-	 */
 	__gem_context_set_priority(fd, ctx, LOCAL_I915_CONTEXT_MAX_USER_PRIORITY);
 
 	return ctx;
@@ -56,22 +50,19 @@ static uint32_t batch_create(int fd)
 	return handle;
 }
 
-static void get_latency(int fd, unsigned ring, int num)
+static void get_latency(int fd, unsigned ring, uint32_t ctx_id, int num)
 {
 	struct drm_i915_gem_execbuffer2 execbuf;
 	struct drm_i915_gem_exec_object2 exec;
-	uint32_t ctx_id;
 	struct timespec start;
 
 	memset(&exec, 0, sizeof(exec));
-
 	exec.handle = batch_create(fd);
 
 	memset(&execbuf, 0, sizeof(execbuf));
 	execbuf.buffers_ptr = (uint64_t)&exec;
 	execbuf.buffer_count = 1;
 	execbuf.flags = ring;
-	ctx_id = create_highest_priority(fd);
 	execbuf.rsvd1 = ctx_id;
 
 	clock_gettime(CLOCK_REALTIME, &start);
@@ -79,16 +70,17 @@ static void get_latency(int fd, unsigned ring, int num)
 	gem_sync(fd, exec.handle);
 	latencies[num] = nsec_elapsed(&start);
 	total_latency += latencies[num];
-	gem_context_destroy(fd, ctx_id);
 	gem_close(fd, exec.handle);
 }
 
 static uint64_t calc_average_latency(int fd)
 {
+	uint32_t ctx_id = create_highest_priority(fd);
 	total_latency = 0;
 	for (int i = 0; i < _TIMES; i++) {
-		get_latency(fd, I915_EXEC_RENDER, i);
+		get_latency(fd, I915_EXEC_RENDER, ctx_id, i);
 	}
+	gem_context_destroy(fd, ctx_id);
 	return total_latency/_TIMES;	
 }
 

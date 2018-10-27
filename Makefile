@@ -4,6 +4,7 @@ targets = 	gem_exec_basic	\
 			gem_tiled_wc	\
 			gem_exec_gttfill\
 			gem_exec_latency\
+			gem_store_latency\
 			gem_fence_busy	\
 			gem_fence_await
 
@@ -26,6 +27,9 @@ gem_exec_gttfill: gem_exec_gttfill.c $(libsrc)
 	$(CC) -o $@ $^ -I/usr/include/libdrm -ldrm
 
 gem_exec_latency: gem_exec_latency.c $(libsrc)
+	$(CC) -o $@ $^ -I/usr/include/libdrm -ldrm
+
+gem_store_latency: gem_store_latency.c $(libsrc)
 	$(CC) -o $@ $^ -I/usr/include/libdrm -ldrm
 
 gem_fence_busy: gem_fence_busy.c $(libsrc)

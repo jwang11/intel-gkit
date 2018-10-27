@@ -20,16 +20,25 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-
+#include <stdio.h>
+#include <stdint.h>
+#include <assert.h>
 #include "gkit_lib.h"
 #include "intel_reg.h"
 
-#define HANG 0x1
-#define NONBLOCK 0x2
-#define WAIT 0x4
+#define _TIMES 128
 
+static uint32_t create_highest_priority(int fd)
+{
+	uint32_t ctx = gem_context_create(fd);
+	__gem_context_set_priority(fd, ctx, LOCAL_I915_CONTEXT_MAX_USER_PRIORITY);
+	return ctx;
+}
 
-static void store(int fd, unsigned ring, int fence, uint32_t target, unsigned offset_value)
+static uint64_t latencies[_TIMES];
+static uint64_t total_latency;
+
+static void store(int fd, unsigned ring, uint32_t target, uint32_t ctx_id, unsigned offset_value)
 {
 	const int SCRATCH = 0;
 	const int BATCH = 1;
@@ -42,8 +51,8 @@ static void store(int fd, unsigned ring, int fence, uint32_t target, unsigned of
 	memset(&execbuf, 0, sizeof(execbuf));
 	execbuf.buffers_ptr = (uint64_t)obj;
 	execbuf.buffer_count = 2;
-	execbuf.flags = ring | I915_EXEC_FENCE_IN;
-	execbuf.rsvd2 = fence;
+	execbuf.flags = ring;
+	execbuf.rsvd1 = ctx_id;
 
 	memset(obj, 0, sizeof(obj));
 	obj[SCRATCH].handle = target;
@@ -70,82 +79,41 @@ static void store(int fd, unsigned ring, int fence, uint32_t target, unsigned of
 	gem_close(fd, obj[BATCH].handle);
 }
 
-static void test_fence_await(int fd, unsigned ring, unsigned flags)
+static void get_latency(int fd, unsigned ring, uint32_t ctx_id, int num)
 {
-	struct drm_i915_gem_exec_object2 obj;
-	struct drm_i915_gem_relocation_entry reloc;
-	struct drm_i915_gem_execbuffer2 execbuf;
-	uint32_t scratch = gem_create(fd, 4096);
-	uint32_t *batch, *out;
-	unsigned engine;
-	int fence, i;
-
-	memset(&execbuf, 0, sizeof(execbuf));
-	execbuf.buffers_ptr = (uint64_t)&obj;
-	execbuf.buffer_count = 1;
-	execbuf.flags = ring | I915_EXEC_FENCE_OUT;
-
-	memset(&obj, 0, sizeof(obj));
-	obj.handle = gem_create(fd, 4096);
-
-	obj.relocs_ptr = (uint64_t)&reloc;
-	obj.relocation_count = 1;
-	memset(&reloc, 0, sizeof(reloc));
-
-	out = gem_mmap__wc(fd, scratch, 0, 4096, PROT_WRITE);
-	gem_set_domain(fd, obj.handle,
-			I915_GEM_DOMAIN_GTT, I915_GEM_DOMAIN_GTT);
-
-	batch = gem_mmap__wc(fd, obj.handle, 0, 4096, PROT_WRITE);
-	gem_set_domain(fd, obj.handle,
-			I915_GEM_DOMAIN_GTT, I915_GEM_DOMAIN_GTT);
-
-	reloc.target_handle = obj.handle; /* recurse */
-	reloc.presumed_offset = 0;
-	reloc.offset = sizeof(uint32_t);
-	reloc.delta = 0;
-	reloc.read_domains = I915_GEM_DOMAIN_COMMAND;
-	reloc.write_domain = 0;
-
-	i = 0;
-	batch[i] = MI_BATCH_BUFFER_START;
-	batch[i] |= 1 << 8 | 1;
-	batch[++i] = 0;
-	batch[++i] = 0;
-	i++;
-
-	execbuf.rsvd2 = -1;
-	gem_execbuf_wr(fd, &execbuf);
-	gem_close(fd, obj.handle);
-	fence = execbuf.rsvd2 >> 32;
-	assert(fence != -1);
-
-	store(fd, ring, fence, scratch, 1);
-	close(fence);
-
-	sleep(1);
-	/* Check for invalidly completing the task early */
-	assert(out[1] == 0);
-
 	struct timespec start;
+	uint32_t handle = gem_create(fd, 4096);
 	clock_gettime(CLOCK_REALTIME, &start);
-	*batch = MI_BATCH_BUFFER_END;
-	__sync_synchronize();
-
-	gem_set_domain(fd, scratch, I915_GEM_DOMAIN_GTT, 0);
-	printf("latency = %llu ms\n", nsec_elapsed(&start)/1000);
-	assert(out[1] == 1);
-	munmap(batch, 4096);
-	munmap(out, 4096);
-	gem_close(fd, scratch);
+	store(fd, ring, handle, ctx_id, num);
+	gem_sync(fd, handle);
+	latencies[num] = nsec_elapsed(&start);
+	total_latency += latencies[num];
+	gem_close(fd, handle);
 }
 
-int main()
+static uint64_t calc_average_latency(int fd)
+{
+	uint32_t ctx_id = create_highest_priority(fd);
+	total_latency = 0;
+	for (int i = 0; i < _TIMES; i++) {
+		get_latency(fd, I915_EXEC_RENDER, ctx_id, i);
+	}
+	gem_context_destroy(fd, ctx_id);
+	return total_latency/_TIMES;	
+}
+
+int main(int argc, char **argv)
 {
 	const struct intel_execution_engine *e;
-	int device = -1;
-	device = drm_open_driver(DRIVER_INTEL);
-	printf("FENCE_AWAIT:\n");
-	test_fence_await(device, I915_EXEC_RENDER, 0);
+	int fd = drm_open_driver(DRIVER_INTEL);
+	/* make GPU warm up */
+	calc_average_latency(fd);
+
+	/* measure latency formally */
+	for (int i = 0; i < 16; i++) {
+		printf("latency: %4.1fms\n", calc_average_latency(fd)/1000.0);
+		sleep(1);
+	}
+	close(fd);
 	return 0;
 }
