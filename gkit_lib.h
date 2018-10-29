@@ -51,12 +51,18 @@
 #define USEC_PER_SEC (1000*MSEC_PER_SEC)
 #define NSEC_PER_SEC (1000*USEC_PER_SEC)
 
+
 uint64_t nsec_elapsed(struct timespec *start);
+
+#define to_user_pointer(a) (uint64_t)a
 
 static inline bool fence_busy(int fence)
 {
 	return poll(&(struct pollfd){fence, POLLIN}, 1, 0) == 0;
 }
+
+int syncobj_destroy(int fd, uint32_t handle);
+uint32_t syncobj_create(int fd);
 
 /**
  * seconds_elapsed:

@@ -56,6 +56,32 @@ int __gem_execbuf_wr(int fd, struct drm_i915_gem_execbuffer2 *execbuf)
 	return err;
 }
 
+int syncobj_destroy(int fd, uint32_t handle)
+{
+    struct local_syncobj_destroy {
+        uint32_t handle, flags;
+    } arg;
+    int err = 0;
+
+    memset(&arg, 0, sizeof(arg));
+    arg.handle = handle;
+    if (drmIoctl(fd, DRM_IOCTL_SYNCOBJ_DESTROY, &arg))
+        err = -errno;
+
+    errno = 0;
+    return err;
+}
+
+uint32_t syncobj_create(int fd)
+{
+    struct local_syncobj_create {
+        uint32_t handle, flags;
+    } arg;
+    memset(&arg, 0, sizeof(arg));
+    drmIoctl(fd, DRM_IOCTL_SYNCOBJ_CREATE, &arg);
+    return arg.handle;
+}
+
 void gem_execbuf_wr(int fd, struct drm_i915_gem_execbuffer2 *execbuf)
 {
 	assert(__gem_execbuf_wr(fd, execbuf) == 0);
